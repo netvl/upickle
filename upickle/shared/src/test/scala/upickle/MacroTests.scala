@@ -1,5 +1,6 @@
 package upickle
 
+import upickle.config.DefaultConfig
 import utest._
 import upickle.TestUtil._
 
@@ -151,6 +152,7 @@ object MacroTests extends TestSuite{
 
   val tests = TestSuite{
     'mixedIn{
+      import config.default._
       import MixedIn._
       * - rw(Obj.ClsB(1), """{"i":1}""")
       * - rw(Obj.ClsA("omg"), """{"s":"omg"}""")
@@ -172,6 +174,7 @@ object MacroTests extends TestSuite{
 
     'commonCustomStructures{
       'simpleAdt {
+        import config.default._
 
         * - rw(ADTs.ADT0(), """{}""")
         * - rw(ADTs.ADTa(1), """{"i":1}""")
@@ -265,7 +268,10 @@ object MacroTests extends TestSuite{
 
         'shallowCustom {
           import Hierarchy._
-          implicit val keyAnnotator = Annotator.keyAnnotator("$custom$")
+          object conf extends DefaultConfig {
+            override implicit val annotator = Annotator.keyAnnotator("$custom$")
+          }
+          import conf._
 
           Reader.macroR[B]
 
@@ -309,6 +315,7 @@ object MacroTests extends TestSuite{
         // Ignore the values which match the default when writing and
         // substitute in defaults when reading if the key is missing
         import Defaults._
+        import config.default._
         * - rw(ADTa(), "{}")
         * - rw(ADTa(321), """{"i":321}""")
         * - rw(ADTb(s = "123"), """{"s":"123"}""")
@@ -320,6 +327,7 @@ object MacroTests extends TestSuite{
       }
       'ignoreExtraFieldsWhenDeserializing {
         import ADTs._
+        import config.default._
         val r1 = read[ADTa]( """{"i":123, "j":false, "k":"haha"}""")
         assert(r1 == ADTa(123))
         val r2 = read[ADTb]( """{"i":123, "j":false, "k":"haha", "s":"kk", "l":true, "z":[1, 2, 3]}""")
@@ -329,6 +337,7 @@ object MacroTests extends TestSuite{
     'GenericDataTypes{
       'simple {
         import Generic.A
+        import config.default._
         * - rw(A(1), """{"t":1}""")
         * - rw(A("1"), """{"t":"1"}""")
         * - rw(A(Seq("1", "2", "3")), """{"t":["1","2","3"]}""")
@@ -336,6 +345,7 @@ object MacroTests extends TestSuite{
       }
       'large{
         import Generic.ADT
+        import config.default._
         rw(ADT(1, 2, 3, 4, 5, 6), """{"a":1,"b":2,"c":3,"d":4,"e":5,"f":6}""")
         rw(
           ADT(
@@ -374,6 +384,7 @@ object MacroTests extends TestSuite{
     }
 
     'custom{
+      import config.default._
       'clsApplyUnapply{
         rw(new Custom.Thing(1, "s"), """{"i":-9}""")
         rw(Custom.Thing(10), """{"i":10}""")
@@ -393,6 +404,7 @@ object MacroTests extends TestSuite{
       }
     }
     'varargs{
+      import config.default._
       rw(Varargs.Sentence("a", "b", "c"), """{"a":"a","bs":["b","c"]}""")
       rw(Varargs.Sentence("a"), """{"a":"a","bs":[]}""")
     }

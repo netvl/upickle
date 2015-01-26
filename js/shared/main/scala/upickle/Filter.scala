@@ -54,16 +54,17 @@ object Filter {
     }
   }
 
+  // This filter only works with the default option serializer defined in upickle.Implicits
   val optionFieldsFilter: Filter = new Filter {
     override def handles[T: ClassTag] = classTag[T] == classTag[Option[_]]
 
     override def readField[T: Reader : ClassTag](name: String, value: Option[Js.Value],
                                                  default: Option[T]): Either[ErrorFactory, T] = {
-      Right(value.map(read[T] /* Some(..) */).getOrElse(None.asInstanceOf[T]))
+      Right(value.map(v => read[T](Js.Arr(v)) /* Some(..) */).getOrElse(None.asInstanceOf[T]))
     }
 
     override def writeField[T: Writer : ClassTag](name: String, value: T, default: Option[T]): Option[Js.Value] =
-      if (value.asInstanceOf[Option[_]].isDefined) Some(write(value))
+      if (value.asInstanceOf[Option[_]].isDefined) Some(write(value).asInstanceOf[Js.Arr].value.head)
       else None
   }
 }

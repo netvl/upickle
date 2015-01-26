@@ -185,9 +185,21 @@ object Macros {
         .paramss
         .flatten
 
-    val argNames = argSyms.map { p =>
-      customKey(c)(p).getOrElse(p.name.toString)
+    var hasVarargs = false
+    val argSymTypes = argSyms.map(_.typeSignature).map{
+      case TypeRef(a, b, c)  if b.toString == "class <repeated>" =>
+        typeOf[Seq[String]] match{
+          case TypeRef(_, b2, _) =>
+            hasVarargs = true
+            TypeRef(a, b2, c)
+        }
+      case t => t
     }
+
+    val (originalArgNames, argNames) = argSyms.map { p =>
+      val originalName = p.name.toString
+      (originalName, customKey(c)(p).getOrElse(originalName))
+    }.unzip
 
     val defaults = argSyms.zipWithIndex.map { case (s, i) =>
       val defaultName = newTermName("apply$default$" + (i + 1))
@@ -205,40 +217,76 @@ object Macros {
       )
     }
 
-    val pickler = if (rw == RW.R) {
-      val objectName = newTermName(c.fresh())
-      val mapName = newTermName(c.fresh())
-      val filterName = newTermName(c.fresh())
+    // implicits caching here is very hacky - it brings several implicits with the same type into scope
+    // they don't conflict only because they are used explicitly below
+    val (cachedImplicitNames, cachedImplicits) = argSymTypes.map { t =>
+      val tpeName = newTypeName(rw.long)
+      val tpeTree = tq"$tpeName[$t]"
+      val name = newTermName(c.fresh("w"))
+      val implicitName = newTermName(c.fresh("iw"))
+      (implicitName, Seq(q"val $name = implicitly[$tpeTree]", q"implicit val $implicitName = $name"))
+    }.unzip
 
-      val filterInvocations = (argNames, defaults, argSymTypes).zipped.map { (name, default, `type`) =>
-        q"""$filterName.readField[${`type`}](
-              $name, $mapName.get($name), $default
-            ).fold(f => throw f($objectName), identity)
-         """
-      }
+    val pickler = if (rw == RW.R) {
+      val objectName = newTermName(c.fresh("o"))
+      val mapName = newTermName(c.fresh("m"))
+      val filterName = newTermName(c.fresh("filter"))
+
+      val filterInvocations0 = (cachedImplicitNames zip argNames, defaults, argSymTypes)
+        .zipped.map { (names, default, `type`) =>
+          val (implicitName, name) = names
+          val argName = newTermName(c.fresh("f"))
+          val argVal = q"val $argName: ${tq""}"
+          q"""$filterName.readField[${`type`}](
+                $name, $mapName.get($name), $default
+              )($implicitName, scala.reflect.classTag[${`type`}]).fold($argVal => throw $argName($objectName), identity)
+           """
+        }.toVector
+      val filterInvocations =
+        if (hasVarargs) filterInvocations0.init :+ q"${filterInvocations0.last}: _*"
+        else filterInvocations0
+
+      val instantiation =
+        if (filterInvocations.isEmpty) q"$companion.apply()"
+        else
+          q"""{
+              val $mapName = $objectName.value.toMap
+              val $filterName = implicitly[upickle.Filter]
+              ..${cachedImplicits.flatten}
+              $companion.apply[..$typeArgs](..$filterInvocations)
+           }"""
+
       q"""
           upickle.Reader.apply[$tpe] {
             case $objectName: upickle.Js.Obj =>
-              val $mapName = $objectName.value.toMap
-              val $filterName = implicitly[upickle.Filter]
-              $companion.apply(..$filterInvocations)
+              $instantiation
           }
        """
-    } else {
-      val valueName = newTermName(c.fresh())
+    } else {  // RW.W
+      val valueName = newTermName(c.fresh("value"))
       val valueParam = q"val $valueName: ${tq""}"
-      val filterName = newTermName(c.fresh())
+      val filterName = newTermName(c.fresh("filter"))
 
-      val filterInvocations = (argNames, defaults, argSymTypes).zipped.map { (name, default, `type`) =>
-        q"""$filterName.writeField[${`type`}](
-              $name, $valueName.${newTermName(name)}, $default
-            ).map($name -> _)
-         """
-      }
+      val filterInvocations = (cachedImplicitNames zip originalArgNames zip argNames, defaults, argSymTypes)
+        .zipped.map { (names, default, `type`) =>
+          val ((implicitName, originalName), name) = names
+          q"""$filterName.writeField[${`type`}](
+                $name, $valueName.${newTermName(originalName)}, $default
+              )($implicitName, scala.reflect.classTag[${`type`}]).map($name -> _)
+           """
+        }
+      val instantiation =
+        if (filterInvocations.isEmpty) q"upickle.Js.Obj()"
+        else
+          q"""
+             val $filterName = implicitly[upickle.Filter]
+             upickle.Js.Obj(Iterator(..$filterInvocations).flatten.toArray: _*)
+           """
+
       q"""
           upickle.Writer.apply[$tpe] { $valueParam =>
-            val $filterName = implicitly[upickle.Filter]
-            upickle.Js.Obj(Iterator(..$filterInvocations).flatten.toArray: _*)
+            ..${cachedImplicits.flatten}
+            ..$instantiation
           }
        """
     }

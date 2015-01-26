@@ -85,7 +85,7 @@ object FailureTests extends TestSuite{
         'missingKey {
           val readFoo = () => read[Fee]( """{"i": 123}""")
           val err = intercept[Invalid.Data]{ readFoo() }
-          assert(err.msg.contains("Key Missing: s"))
+          assert(err.msg.contains("Key missing: s"))
         }
         'completelyInvalid{
           val readFoo2 = () => read[Fee]("""[1, 2, 3]""")
