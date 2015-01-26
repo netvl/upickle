@@ -226,7 +226,7 @@ object Macros {
        """
     } else {
       val valueName = newTermName(c.fresh())
-      val valueNameTree = q"$valueName"
+      val valueParam = q"val $valueName: ${tq""}"
       val filterName = newTermName(c.fresh())
 
       val filterInvocations = (argNames, defaults, argSymTypes).zipped.map { (name, default, `type`) =>
@@ -236,10 +236,10 @@ object Macros {
          """
       }
       q"""
-          upickle.Writer.apply[$tpe](($valueNameTree) => {
+          upickle.Writer.apply[$tpe] { $valueParam =>
             val $filterName = implicitly[upickle.Filter]
             upickle.Js.Obj(Iterator(..$filterInvocations).flatten.toArray: _*)
-          })
+          }
        """
     }
 
