@@ -185,23 +185,15 @@ object Macros {
         .paramss
         .flatten
 
-    val args = argSyms.map { p =>
+    val argNames = argSyms.map { p =>
       customKey(c)(p).getOrElse(p.name.toString)
     }
-
-    val rwName = newTermName(s"Case${args.length}${rw.short}")
-
-    val actionName = rw.actionNames
-      .map(newTermName(_))
-      .find(companion.tpe.member(_) != NoSymbol)
-      .getOrElse(c.abort(c.enclosingPosition, "None of the following methods " +
-        "were defined: " + rw.actionNames.mkString(" ")))
 
     val defaults = argSyms.zipWithIndex.map { case (s, i) =>
       val defaultName = newTermName("apply$default$" + (i + 1))
       companion.tpe.member(defaultName) match{
-        case NoSymbol => q"null"
-        case _ => q"upickle.writeJs($companion.$defaultName)"
+        case NoSymbol => q"None"
+        case _ => q"Some($companion.$defaultName)"
       }
     }
 
@@ -213,15 +205,80 @@ object Macros {
       )
     }
 
-    val pickler =
-      if (args.length == 0) // 0-arg case classes are treated like `object`s
-        q"upickle.Internal.${newTermName("Case0"+rw.short)}($companion())"
-      else if (args.length == 1 && rw == RW.W) // 1-arg case classes need their output wrapped in a Tuple1
-        q"upickle.Internal.$rwName(x => $companion.$actionName[..$typeArgs](x).map(Tuple1.apply), Array(..$args), Array(..$defaults)): upickle.${newTypeName(rw.long)}[$tpe]"
-      else // Otherwise, reading and writing are kinda identical
-        q"upickle.Internal.$rwName($companion.$actionName[..$typeArgs], Array(..$args), Array(..$defaults)): upickle.${newTypeName(rw.long)}[$tpe]"
+    val pickler = if (rw == RW.R) {
+      val objectName = newTermName(c.fresh())
+      val mapName = newTermName(c.fresh())
+      val filterName = newTermName(c.fresh())
 
-    annotate(c)(tpe)(pickler)
+      val filterInvocations = (argNames, defaults, argSymTypes).zipped.map { (name, default, `type`) =>
+        q"""$filterName.readField[${`type`}](
+              $name, $mapName.get($name), $default
+            ).fold(f => throw f($objectName), identity)
+         """
+      }
+      q"""
+          upickle.Reader.apply[$tpe] {
+            case $objectName: upickle.Js.Obj =>
+              val $mapName = $objectName.value.toMap
+              val $filterName = implicitly[upickle.Filter]
+              $companion.apply(..$filterInvocations)
+          }
+       """
+    } else {
+      val valueName = newTermName(c.fresh())
+      val valueNameTree = q"$valueName"
+      val filterName = newTermName(c.fresh())
+
+      val filterInvocations = (argNames, defaults, argSymTypes).zipped.map { (name, default, `type`) =>
+        q"""$filterName.writeField[${`type`}](
+              $name, $valueName.${newTermName(name)}, $default
+            ).map($name -> _)
+         """
+      }
+      q"""
+          upickle.Writer.apply[$tpe](($valueNameTree) => {
+            val $filterName = implicitly[upickle.Filter]
+            upickle.Js.Obj(Iterator(..$filterInvocations).flatten.toArray: _*)
+          })
+       """
+    }
+
+//    val rwName = newTermName(s"Case${argNames.length}${rw.short}")
+//
+//    val actionName = rw.actionNames
+//      .map(newTermName(_))
+//      .find(companion.tpe.member(_) != NoSymbol)
+//      .getOrElse(c.abort(c.enclosingPosition, "None of the following methods " +
+//        "were defined: " + rw.actionNames.mkString(" ")))
+//
+//    val (typeArgNames, typeArgAssigns) = argSymTypes.map{t =>
+//
+////      if (t.typeSignature.toString == "")
+//      val name = newTermName(c.fresh())
+//      val tpeTree = tq"${newTypeName(rw.long)}[$t]"
+//      (name, Seq(q"val $name = implicitly[$tpeTree]", q"implicit val ${newTermName(c.fresh())} = $name"))
+//    }.unzip
+//
+//    val pickler =
+//      if (argNames.length == 0) // 0-arg case classes are treated like `object`s
+//        q"upickle.Internal.${newTermName("Case0"+rw.short)}($companion())"
+//      else if (argNames.length == 1 && rw == RW.W) // 1-arg case classes need their output wrapped in a Tuple1
+//        q"upickle.Internal.$rwName(x => $companion.$actionName[..$typeArgs](x).map(Tuple1.apply), Array(..$argNames), Array(..$defaults)): upickle.${newTypeName(rw.long)}[$tpe]"
+//      else // Otherwise, reading and writing are kinda identical
+//        q"""{
+//          ..${typeArgAssigns.flatten}
+//
+//          {
+//            upickle.Internal.$rwName[..$argSymTypes, $tpe](
+//              $companion.$actionName[..$typeArgs],
+//              Array(..$argNames),
+//              Array(..$defaults)
+//            )(..$typeArgNames): upickle.${newTypeName(rw.long)}[$tpe]
+//          }
+//        }"""
+    val x = annotate(c)(tpe)(pickler)
+//    println(x)
+    x
   }
 
   def companionTree(c: Context)(tpe: c.Type) = {
