@@ -130,6 +130,10 @@ object Varargs{
 object Covariant{
   case class Tree[+T](value: T)
 }
+object WithOptions {
+  case class Thingy1(x: Int, y: Option[String])
+  case class Thingy2(x: Int, y: Option[String], z: Double = 1.2)
+}
 object MacroTests extends TestSuite{
   import Generic.ADT
   import Hierarchy._
@@ -300,6 +304,17 @@ object MacroTests extends TestSuite{
         rw(CC: AA, """{"$variant":"upickle.Singletons.CC"}""")
       }
     }
+    'filters {
+      import WithOptions._
+      object conf extends config.DefaultConfig {
+        override implicit val filter = Filter.optionFieldsFilter orElse Filter.identityFilter
+      }
+      import conf._
+
+      * - rw(Thingy1(10, Some("omg")), """{"x":10,"y":"omg"}""")
+      * - rw(Thingy1(10, None), """{"x":10}""")
+      * - rw(Thingy2(10, None), """{"x":10,"z":1.2}""")
+     }
     'robustnessAgainstVaryingSchemas {
       'renameKeysViaAnnotations {
         import Annotated._
