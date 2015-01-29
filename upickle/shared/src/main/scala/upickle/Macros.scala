@@ -291,39 +291,6 @@ object Macros {
        """
     }
 
-//    val rwName = newTermName(s"Case${argNames.length}${rw.short}")
-//
-//    val actionName = rw.actionNames
-//      .map(newTermName(_))
-//      .find(companion.tpe.member(_) != NoSymbol)
-//      .getOrElse(c.abort(c.enclosingPosition, "None of the following methods " +
-//        "were defined: " + rw.actionNames.mkString(" ")))
-//
-//    val (typeArgNames, typeArgAssigns) = argSymTypes.map{t =>
-//
-////      if (t.typeSignature.toString == "")
-//      val name = newTermName(c.fresh())
-//      val tpeTree = tq"${newTypeName(rw.long)}[$t]"
-//      (name, Seq(q"val $name = implicitly[$tpeTree]", q"implicit val ${newTermName(c.fresh())} = $name"))
-//    }.unzip
-//
-//    val pickler =
-//      if (argNames.length == 0) // 0-arg case classes are treated like `object`s
-//        q"upickle.Internal.${newTermName("Case0"+rw.short)}($companion())"
-//      else if (argNames.length == 1 && rw == RW.W) // 1-arg case classes need their output wrapped in a Tuple1
-//        q"upickle.Internal.$rwName(x => $companion.$actionName[..$typeArgs](x).map(Tuple1.apply), Array(..$argNames), Array(..$defaults)): upickle.${newTypeName(rw.long)}[$tpe]"
-//      else // Otherwise, reading and writing are kinda identical
-//        q"""{
-//          ..${typeArgAssigns.flatten}
-//
-//          {
-//            upickle.Internal.$rwName[..$argSymTypes, $tpe](
-//              $companion.$actionName[..$typeArgs],
-//              Array(..$argNames),
-//              Array(..$defaults)
-//            )(..$typeArgNames): upickle.${newTypeName(rw.long)}[$tpe]
-//          }
-//        }"""
     val x = annotate(c)(tpe)(pickler)
 //    println(x)
     x
