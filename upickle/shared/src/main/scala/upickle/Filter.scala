@@ -1,8 +1,9 @@
 package upickle
 
+import upickle.Filter.ErrorFactory
+
 import scala.annotation.implicitNotFound
 import scala.reflect.{ClassTag, classTag}
-import Filter.ErrorFactory
 
 /**
  * Represents a transformation applied to fields of case classes when they are pickled or unpickled.
