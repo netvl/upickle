@@ -254,19 +254,30 @@ object Macros {
       val valueParam = q"val $valueName: ${tq""}"
       val filterName = newTermName(c.fresh("filter"))
 
-      val filterInvocations = (originalArgNames zip argNames, defaults, argSymTypes)
+      val actionName = Vector("unapply", "unapplySeq")
+        .map(newTermName(_))
+        .find(companion.tpe.member(_) != NoSymbol)
+        .getOrElse(c.abort(c.enclosingPosition, s"No unapply nor unapplySeq methods are defined in companion object of $tpe"))
+
+      val generatedPatternNames = argNames.map(c.fresh).map(newTermName(_))
+
+      val extractStatement = if (argNames.nonEmpty) {
+        val namePattern = if (argNames.size == 1) pq"${generatedPatternNames.head}"
+        else pq"(..$generatedPatternNames)"
+        q"val Some($namePattern) = $companion.$actionName[..$tpeTypeArgs]($valueName)"
+      } else q""  // no fields, nothing to extract
+
+      val filterInvocations = (generatedPatternNames zip argNames, defaults, argSymTypes)
         .zipped.map { (names, default, `type`) =>
-          val (originalName, name) = names
+          val (patternName, name) = names
           val argType = substitute(`type`)
-          q"""$filterName.writeField[$argType](
-                $name, $valueName.${newTermName(originalName)}, $default
-              ).map($name -> _)
-           """
+          q"$filterName.writeField[$argType]($name, $patternName, $default).map($name -> _)"
         }
       val instantiation =
         if (filterInvocations.isEmpty) q"upickle.Js.Obj()"
         else
           q"""
+             ..$extractStatement
              val $filterName = implicitly[upickle.Filter]
              upickle.Js.Obj(Iterator(..$filterInvocations).flatten.toArray: _*)
            """
