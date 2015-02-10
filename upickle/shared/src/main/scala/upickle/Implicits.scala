@@ -2,7 +2,9 @@ package upickle
 
 import upickle.Aliases._
 
-
+import scala.{collection => coll}
+import scala.collection.{mutable => mut}
+import scala.collection.{immutable => imm}
 import scala.reflect.ClassTag
 import scala.concurrent.duration.{FiniteDuration, Duration}
 import acyclic.file
@@ -83,14 +85,77 @@ trait Implicits extends Types {
   implicit val DoubleRW = NumericReadWriter(_.toDouble, _.toDouble)
 
   import collection.generic.CanBuildFrom
-  implicit def SeqishR[T: R, V[_]]
-                       (implicit cbf: CanBuildFrom[Nothing, T, V[T]]): R[V[T]] = R[V[T]](
-    Internal.validate("Array(n)"){case Js.Arr(x@_*) => x.map(readJs[T]).to[V]}
-  )
 
-  implicit def SeqishW[T: W, V[_] <: Iterable[_]]: W[V[T]] = W[V[T]]{
-    (x: V[T]) => Js.Arr(x.iterator.asInstanceOf[Iterator[T]].map(writeJs(_)).toArray:_*)
+  private[this] def mkIterableR[T: R, V[_] <: Iterable[_]](implicit cbf: CanBuildFrom[V[T], T, V[T]]) = R[V[T]](
+    Internal.validate("Array(n)"){ case Js.Arr(x@_*) => x.map(readJs[T]).to[V] }
+  )
+  private[this] def mkIterableW[T: W, V[_] <: Iterable[_]] = W[V[T]] {
+    (x: V[T]) => Js.Arr(x.iterator.asInstanceOf[Iterator[T]].map(writeJs(_)).toArray: _*)
   }
+
+  implicit def IterableR[T: R]: R[Iterable[T]] = mkIterableR[T, Iterable]
+  implicit def IterableW[T: W]: W[Iterable[T]] = mkIterableW[T, Iterable]
+
+  implicit def SeqR[T: R]: R[coll.Seq[T]] = mkIterableR[T, coll.Seq]
+  implicit def SeqW[T: W]: W[coll.Seq[T]] = mkIterableW[T, coll.Seq]
+  implicit def ImmSeqR[T: R]: R[imm.Seq[T]] = mkIterableR[T, imm.Seq]
+  implicit def ImmSeqW[T: W]: W[imm.Seq[T]] = mkIterableW[T, imm.Seq]
+  implicit def MutSeqR[T: R]: R[mut.Seq[T]] = mkIterableR[T, mut.Seq]
+  implicit def MutSeqW[T: W]: W[mut.Seq[T]] = mkIterableW[T, mut.Seq]
+
+  implicit def SetR[T: R]: R[coll.Set[T]] = mkIterableR[T, coll.Set]
+  implicit def SetW[T: W]: W[coll.Set[T]] = mkIterableW[T, coll.Set]
+  implicit def ImmSetR[T: R]: R[imm.Set[T]] = mkIterableR[T, imm.Set]
+  implicit def ImmSetW[T: W]: W[imm.Set[T]] = mkIterableW[T, imm.Set]
+  implicit def MutSetR[T: R]: R[mut.Set[T]] = mkIterableR[T, mut.Set]
+  implicit def MutSetW[T: W]: W[mut.Set[T]] = mkIterableW[T, mut.Set]
+
+  implicit def IndexedSeqR[T: R]: R[coll.IndexedSeq[T]] = mkIterableR[T, coll.IndexedSeq]
+  implicit def IndexedSeqW[T: W]: W[coll.IndexedSeq[T]] = mkIterableW[T, coll.IndexedSeq]
+  implicit def ImmIndexedSeqR[T: R]: R[imm.IndexedSeq[T]] = mkIterableR[T, imm.IndexedSeq]
+  implicit def ImmIndexedSeqW[T: W]: W[imm.IndexedSeq[T]] = mkIterableW[T, imm.IndexedSeq]
+  implicit def MutIndexedSeqR[T: R]: R[mut.IndexedSeq[T]] = mkIterableR[T, mut.IndexedSeq]
+  implicit def MutIndexedSeqW[T: W]: W[mut.IndexedSeq[T]] = mkIterableW[T, mut.IndexedSeq]
+
+  implicit def LinearSeqR[T: R]: R[coll.LinearSeq[T]] = mkIterableR[T, coll.LinearSeq]
+  implicit def LinearSeqW[T: W]: W[coll.LinearSeq[T]] = mkIterableW[T, coll.LinearSeq]
+  implicit def ImmLinearSeqR[T: R]: R[imm.LinearSeq[T]] = mkIterableR[T, imm.LinearSeq]
+  implicit def ImmLinearSeqW[T: W]: W[imm.LinearSeq[T]] = mkIterableW[T, imm.LinearSeq]
+  implicit def MutLinearSeqR[T: R]: R[mut.LinearSeq[T]] = mkIterableR[T, mut.LinearSeq]
+  implicit def MutLinearSeqW[T: W]: W[mut.LinearSeq[T]] = mkIterableW[T, mut.LinearSeq]
+
+  implicit def SortedSetR[T: R: Ordering]: R[coll.SortedSet[T]] = mkIterableR[T, coll.SortedSet]
+  implicit def SortedSetW[T: W: Ordering]: W[coll.SortedSet[T]] = mkIterableW[T, coll.SortedSet]
+  implicit def ImmSortedSetR[T: R: Ordering]: R[imm.SortedSet[T]] = mkIterableR[T, imm.SortedSet]
+  implicit def ImmSortedSetW[T: W: Ordering]: W[imm.SortedSet[T]] = mkIterableW[T, imm.SortedSet]
+  implicit def MutSortedSetR[T: R: Ordering]: R[mut.SortedSet[T]] = mkIterableR[T, mut.SortedSet]
+  implicit def MutSortedSetW[T: W: Ordering]: W[mut.SortedSet[T]] = mkIterableW[T, mut.SortedSet]
+
+  implicit def QueueR[T: R]: R[imm.Queue[T]] = mkIterableR[T, imm.Queue]
+  implicit def QueueW[T: W]: W[imm.Queue[T]] = mkIterableW[T, imm.Queue]
+
+  implicit def VectorR[T: R]: R[imm.Vector[T]] = mkIterableR[T, imm.Vector]
+  implicit def VectorW[T: W]: W[imm.Vector[T]] = mkIterableW[T, imm.Vector]
+
+  implicit def ListR[T: R]: R[imm.List[T]] = mkIterableR[T, imm.List]
+  implicit def ListW[T: W]: W[imm.List[T]] = mkIterableW[T, imm.List]
+
+  implicit def StreamR[T: R]: R[imm.Stream[T]] = mkIterableR[T, imm.Stream]
+  implicit def StreamW[T: W]: W[imm.Stream[T]] = mkIterableW[T, imm.Stream]
+
+  implicit def ImmHashSetR[T: R]: R[imm.HashSet[T]] = mkIterableR[T, imm.HashSet]
+  implicit def ImmHashSetW[T: W]: W[imm.HashSet[T]] = mkIterableW[T, imm.HashSet]
+  implicit def MutHashSetR[T: R]: R[mut.HashSet[T]] = mkIterableR[T, mut.HashSet]
+  implicit def MutHashSetW[T: W]: W[mut.HashSet[T]] = mkIterableW[T, mut.HashSet]
+
+  implicit def BufferR[T: R]: R[mut.Buffer[T]] = mkIterableR[T, mut.Buffer]
+  implicit def BufferW[T: W]: W[mut.Buffer[T]] = mkIterableW[T, mut.Buffer]
+
+  implicit def ArrayBufferR[T: R]: R[mut.ArrayBuffer[T]] = mkIterableR[T, mut.ArrayBuffer]
+  implicit def ArrayBufferW[T: W]: W[mut.ArrayBuffer[T]] = mkIterableW[T, mut.ArrayBuffer]
+
+  implicit def LinkedListR[T: R]: R[mut.LinkedList[T]] = mkIterableR[T, mut.LinkedList]
+  implicit def LinkedListW[T: W]: W[mut.LinkedList[T]] = mkIterableW[T, mut.LinkedList]
 
   private[this] def SeqLikeW[T: W, V[_]](g: V[T] => Option[Seq[T]]): W[V[T]] = W[V[T]](
     x => Js.Arr(g(x).get.map(x => writeJs(x)):_*)
@@ -100,14 +165,14 @@ trait Implicits extends Types {
   )
 
   implicit def OptionW[T: W]: W[Option[T]] = SeqLikeW[T, Option](x => Some(x.toSeq))
-  implicit def SomeW[T: W] = W[Some[T]](OptionW[T].write)
+  implicit def SomeW[T: W]: W[Some[T]] = W[Some[T]](OptionW[T].write)
   implicit def NoneW: W[None.type] = W[None.type](OptionW[Int].write)
   implicit def OptionR[T: R]: R[Option[T]] = SeqLikeR[T, Option](_.headOption)
-  implicit def SomeR[T: R] = R[Some[T]](OptionR[T].read andThen (_.asInstanceOf[Some[T]]))
+  implicit def SomeR[T: R]: R[Some[T]] = R[Some[T]](OptionR[T].read andThen (_.asInstanceOf[Some[T]]))
   implicit def NoneR: R[None.type] = R[None.type](OptionR[Int].read andThen (_.asInstanceOf[None.type]))
 
-  implicit def ArrayW[T: W: ClassTag] = SeqLikeW[T, Array](Array.unapplySeq)
-  implicit def ArrayR[T: R: ClassTag] = SeqLikeR[T, Array](x => Array.apply(x:_*))
+  implicit def ArrayW[T: W: ClassTag]: W[Array[T]] = SeqLikeW[T, Array](Array.unapplySeq)
+  implicit def ArrayR[T: R: ClassTag]: R[Array[T]] = SeqLikeR[T, Array](x => Array.apply(x:_*))
 
   implicit def MapW[K: W, V: W]: W[Map[K, V]] =
     if (implicitly[W[K]] == implicitly[W[String]])

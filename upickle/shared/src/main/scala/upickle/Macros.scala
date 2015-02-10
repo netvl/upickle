@@ -225,11 +225,9 @@ object Macros {
         val argName = newTermName(c.fresh("f"))
         val argVal = q"val $argName: ${tq""}"
         val argType = substitute(`type`)
-        // we have to be explicit in implicit parameters to avoid diverging implicit expansion error
         q"""$filterName.readField[$argType](
               $name, $mapName.get($name), $default
-            )(implicitly[upickle.Reader[$argType]], implicitly[scala.reflect.ClassTag[$argType]])
-             .fold($argVal => throw $argName($objectName), identity)
+            ).fold($argVal => throw $argName($objectName), identity)
          """
       }.toVector
       val filterInvocations =
@@ -273,11 +271,9 @@ object Macros {
         .zipped.map { (names, default, `type`) =>
           val (patternName, name) = names
           val argType = substitute(`type`)
-          // we have to be explicit in implicit parameters to avoid diverging implicit expansion error
           q"""$filterName.writeField[$argType](
                 $name, $patternName, $default
-              )(implicitly[upickle.Writer[$argType]], implicitly[scala.reflect.ClassTag[$argType]])
-              .map($name -> _)"""
+              ).map($name -> _)"""
         }
       val instantiation =
         if (filterInvocations.isEmpty) q"upickle.Js.Obj()"
